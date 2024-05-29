@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "AppConfig:EndPoint": "https://<resource-group>-cfg.azconfig.io",
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "ServiceBus:Connection:FullyQualifiedNamespace": "<resource-group>-sbns.servicebus.windows.net",
+    "Azure:TableEndpoint": "https://<resourcegroup>store.table.core.windows.net/",
+    "Incoming:Topic": "<resource-group>-sbt-incoming-<user>",
+    "Incoming:Subscription:Registration": "<resource-group>-sbs-registration",
+    "Incoming:StoreName": "incoming<user>"
+  }
+}

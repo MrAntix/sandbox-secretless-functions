@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Sandbox.Secretless.Functions": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7212 --verbose",
+      "launchBrowser": false
+    }
+  }
+}
