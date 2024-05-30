@@ -56,6 +56,7 @@ if ($resourceGroupName -eq $newResourceGroupName) {
 # Define the group name
 $groupName = "$resourceGroupName-group"
 $group = Get-AzADGroup -SearchString $groupName 
+$buildId = (Get-Random -Minimum 0 -Maximum 999).ToString().PadLeft(3, '0')
 
 if ($null -eq $group) {
     $group = New-AzADGroup -DisplayName $groupName -MailNickName $groupName
@@ -65,7 +66,8 @@ try {
     $deployment = New-AzResourceGroupDeployment -TemplateFile "./main.bicep" -Mode Complete -Force -Verbose `
         -ResourceGroupName $resourceGroupName `
         -groupId $group.Id `
-        -prefix $resourceGroupName
+        -prefix $resourceGroupName `
+        -buildId $buildId
 
     Write-Host "Deployed app $($deployment.Outputs | Format-Table -AutoSize -Wrap | Out-String)"
 
@@ -109,6 +111,25 @@ try {
     Compress-Archive -Path $localPublishFolder/* -DestinationPath $zipPath -Force
     Publish-AzWebapp -ResourceGroupName $resourceGroupName -Name $appName -ArchivePath $zipPath -Force
 
+    # Run Tests
+
+    # Cleanup Build Resources
+    $storageAccountName = $deployment.Outputs.storageAccountName.Value
+    $context = New-AzStorageContext -StorageAccountName $storageAccountName
+    $tables = Get-AzStorageTable -Context $context    
+    foreach ($table in $tables) {
+        if ($table.Name -like "*$buildId") {
+            Remove-AzStorageTable -Name $table.Name -Context $context
+        }
+    }
+
+    $serviceBusNamespaceName = $deployment.Outputs.serviceBusNamespaceName.Value
+    $topics = Get-AzServiceBusTopic -ResourceGroupName $resourceGroupName -NamespaceName $serviceBusNamespaceName
+    foreach ($topic in $topics) {
+        if ($topic.Name -like "*-$buildId") {
+            Remove-AzServiceBusTopic -ResourceGroupName $resourceGroupName -NamespaceName $serviceBusNamespaceName -Name $topic.Name
+        }
+    }
 }
 catch {
     Write-Host "failed, error:"

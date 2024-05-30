@@ -2,13 +2,19 @@
 param prefix string
 @minLength(4)
 param groupId string
+param buildId string
 
 var prefixSafe = toLower(replace(prefix, '-', ''))
 
-var devs = ['ci', 'aj']
+var devs = ['aj']
+var variants = empty(buildId) ? devs : [buildId, ...devs]
 
 var storageAccountName = '${prefixSafe}store'
+output storageAccountName string = storageAccountName
+
 var serviceBusNamespaceName = '${prefix}-sbns'
+output serviceBusNamespaceName string = serviceBusNamespaceName
+
 var incomingTopicName = '${prefix}-sbt-incoming'
 var incomingRegistrationSubscriptionName = '${prefix}-sbs-registration'
 var servicePlanName = '${prefix}-plan'
@@ -16,6 +22,7 @@ var logAnalyticsWorkspaceName = '${prefix}-logs'
 var appInsightsName = '${prefix}-insights'
 var appName = '${prefix}-app'
 var incomingStoreName = 'incoming'
+var isLinux = false
 
 // Storage Account --------------------------------------------------------------------------------
 module storageAccount 'storage/account.bicep' = {
@@ -55,7 +62,7 @@ module incomingStore 'storage/table.bicep' = {
   params: {
     storageAccountName: storageAccountName
     name: incomingStoreName
-    variants: devs
+    variants: variants
   }
   dependsOn: [
     storageAccount
@@ -87,7 +94,7 @@ module incomingTopic 'service-bus/topic.bicep' = {
   params: {
     namespaceName: serviceBusNamespaceName
     name: incomingTopicName
-    variants: devs
+    variants: variants
   }
   dependsOn: [
     serviceBusNamespace
@@ -100,9 +107,12 @@ module incomingSubscription 'service-bus/subscription.bicep' = {
     namespaceName: serviceBusNamespaceName
     topicName: incomingTopicName
     name: incomingRegistrationSubscriptionName
-    variants: devs
+    variants: variants
     filter: {
-      event: 'registration'
+      name: 'registrationEvent'
+      properties: {
+        eventType: 'registration'
+      }
     }
   }
   dependsOn: [
@@ -137,16 +147,19 @@ var APP_ROLES = {
   CONTRIBUTER: '641177b8-a67a-45b9-a033-47bc880bb21e'
 }
 
-resource servicePlan 'Microsoft.Web/serverfarms@2021-01-01' = {
+resource servicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: servicePlanName
   location: resourceGroup().location
   sku: {
     name: 'Y1'
     tier: 'Dynamic'
   }
+  properties: {
+    reserved: isLinux
+  }
 }
 
-resource app 'Microsoft.Web/sites@2021-01-01' = {
+resource app 'Microsoft.Web/sites@2023-12-01' = {
   name: appName
   location: resourceGroup().location
   kind: 'functionapp'
@@ -155,9 +168,10 @@ resource app 'Microsoft.Web/sites@2021-01-01' = {
   }
   properties: {
     serverFarmId: servicePlan.id
-    reserved: true
+    reserved: isLinux
     siteConfig: {
-      netFrameworkVersion: 'v8.0'
+      netFrameworkVersion: isLinux ? null : 'v8.0'
+      linuxFxVersion: isLinux ? 'DOTNET-ISOLATED|8.0' : null
       use32BitWorkerProcess: false
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
@@ -179,23 +193,23 @@ resource app 'Microsoft.Web/sites@2021-01-01' = {
           value: appInsights.properties.InstrumentationKey
         }
         {
-          name: 'ServiceBus:Connection:fullyQualifiedNamespace'
+          name: 'ServiceBus__Connection__fullyQualifiedNamespace'
           value: '${serviceBusNamespace.name}.servicebus.windows.net'
         }
         {
-          name: 'Incoming:Topic'
+          name: 'Incoming__Topic'
           value: incomingTopicName
         }
         {
-          name: 'Incoming:Subscription:Registration'
+          name: 'Incoming__Subscription__Registration'
           value: incomingRegistrationSubscriptionName
         }
         {
-          name: 'Azure:TableEndpoint'
+          name: 'Azure__TableEndpoint'
           value: 'https://${storageAccount.name}.table.${environment().suffixes.storage}/'
         }
         {
-          name: 'Incoming:StoreName'
+          name: 'Incoming__StoreName'
           value: incomingStoreName
         }
       ]

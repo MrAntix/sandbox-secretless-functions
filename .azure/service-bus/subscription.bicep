@@ -3,8 +3,13 @@ param topicName string
 @minLength(3)
 @maxLength(40)
 param name string
-param filter object = {}
+param filter Filter?
 param variants array = []
+
+type Filter = {
+  name: string
+  properties: object
+}
 
 resource namespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = {
   name: namespaceName
@@ -19,7 +24,7 @@ resource subscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022
   name: name
 }
 
-resource topicVariants 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = [
+resource topicVariants 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' existing = [
   for variant in variants: {
     parent: namespace
     name: '${topicName}-${variant}'
@@ -35,11 +40,11 @@ resource subscriptionVariants 'Microsoft.ServiceBus/namespaces/topics/subscripti
 
 resource subscriptionFilter 'Microsoft.ServiceBus/namespaces/topics/subscriptions/rules@2022-10-01-preview' = if (!empty(filter)) {
   parent: subscription
-  name: '${name}Filter'
+  name: filter!.name
   properties: {
     filterType: 'CorrelationFilter'
     correlationFilter: {
-      properties: filter
+      properties: filter!.properties
     }
   }
 }
@@ -47,11 +52,11 @@ resource subscriptionFilter 'Microsoft.ServiceBus/namespaces/topics/subscription
 resource subscriptionFilterVariants 'Microsoft.ServiceBus/namespaces/topics/subscriptions/rules@2022-10-01-preview' = [
   for (variant, i) in variants: if (!empty(variant) && !empty(filter)) {
     parent: subscriptionVariants[i]
-    name: '${name}Filter-${variant}'
+    name: filter!.name
     properties: {
       filterType: 'CorrelationFilter'
       correlationFilter: {
-        properties: filter
+        properties: filter!.properties
       }
     }
   }
